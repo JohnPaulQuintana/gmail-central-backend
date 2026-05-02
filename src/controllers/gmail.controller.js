@@ -282,23 +282,36 @@ exports.debugUser = async (req, res) => {
 
   const { user_id } = req.params;
 
-  const { data: accounts } = await supabase
-    .from("accounts")
-    .select("*")
-    .eq("user_id", user_id);
+  log("Debug start", start);
 
-  const { data: inbox } = await supabase
-    .from("emails")
-    .select("*")
-    .eq("user_id", user_id)
-    .order("created_at", { ascending: false });
+  // RUN BOTH QUERIES IN PARALLEL
+  const [accountsRes, inboxRes] = await Promise.all([
+    supabase
+      .from("accounts")
+      .select("*")
+      .eq("user_id", user_id),
 
-  log("Debug loaded", start);
+    supabase
+      .from("emails")
+      .select("*")
+      .eq("user_id", user_id)
+      .order("created_at", { ascending: false })
+      .limit(50), // IMPORTANT LIMIT FIX
+  ]);
+
+  const accounts = accountsRes.data;
+  const inbox = inboxRes.data;
+
+  log("Debug loaded", start, {
+    accounts: accounts?.length,
+    inbox: inbox?.length,
+  });
 
   res.json({
     user_id,
     accounts,
     inbox,
     total: inbox?.length || 0,
+    duration_ms: Date.now() - start,
   });
 };
