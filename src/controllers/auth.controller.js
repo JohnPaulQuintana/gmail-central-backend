@@ -1,35 +1,41 @@
 const querystring = require("querystring");
 const axios = require("axios");
-const db = require("../db/test_db");
-const { addAccount } = require("../db/user.db");
-const { v4: uuidv4 } = require("uuid");
-
+// const db = require("../db/test_db");
+// const { addAccount } = require("../db/user.db");
+// const { v4: uuidv4 } = require("uuid");
+// DATABASE SUPABASE
+const supabase = require("../db/supabase");
 // =====================
 // APP LOGIN (temporary simple auth)
 // =====================
-exports.appLogin = (req, res) => {
+exports.appLogin = async (req, res) => {
   const { email } = req.body;
 
   if (!email) {
     return res.status(400).json({ error: "email required" });
   }
 
-  // FIX: use db.users (NOT addAccount.users)
-  let user = db.users.find(u => u.email === email);
+  // find user
+  let { data: user } = await supabase
+    .from("users")
+    .select("*")
+    .eq("email", email)
+    .single();
 
+  // create if not exists
   if (!user) {
-    user = {
-      user_id: uuidv4(),
-      email,
-      created_at: Date.now(),
-    };
+    const { data: newUser } = await supabase
+      .from("users")
+      .insert([{ email }])
+      .select()
+      .single();
 
-    db.users.push(user);
+    user = newUser;
   }
 
   res.json({
     message: "App authenticated",
-    user_id: user.user_id,
+    user_id: user.id,
   });
 };
 
@@ -41,7 +47,7 @@ exports.getAuthUrl = (req, res) => {
 
   if (!app_user_id) {
     return res.status(400).json({
-      error: "app_user_id is required"
+      error: "app_user_id is required",
     });
   }
 
@@ -59,7 +65,7 @@ exports.getAuthUrl = (req, res) => {
       "https://www.googleapis.com/auth/gmail.readonly",
       "openid",
       "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile"
+      "https://www.googleapis.com/auth/userinfo.profile",
     ].join(" "),
   });
 
@@ -79,7 +85,7 @@ exports.handleCallback = async (req, res) => {
 
     if (!app_user_id) {
       return res.status(400).json({
-        error: "Missing app_user_id"
+        error: "Missing app_user_id",
       });
     }
 
@@ -97,7 +103,7 @@ exports.handleCallback = async (req, res) => {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
-      }
+      },
     );
 
     const tokens = tokenRes.data;
@@ -109,7 +115,7 @@ exports.handleCallback = async (req, res) => {
         headers: {
           Authorization: `Bearer ${tokens.access_token}`,
         },
-      }
+      },
     );
 
     const accountData = {
@@ -129,17 +135,27 @@ exports.handleCallback = async (req, res) => {
     };
 
     // 3. SAVE (multi-account safe)
-    const result = addAccount(app_user_id, accountData);
+    await supabase.from("accounts").insert([
+      {
+        user_id: app_user_id,
 
-    // res.json({
-    //   message: "Gmail connected successfully",
-    //   app_user_id,
-    //   account: accountData,
-    // });
-    return res.redirect(
-      `navisync://auth/callback?status=success`
-    );
+        google_id: profile.data.sub,
+        email: profile.data.email,
+        name: profile.data.name,
+        picture: profile.data.picture,
 
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+
+        scope: tokens.scope,
+        token_type: tokens.token_type,
+        expiry_date: Date.now() + tokens.expires_in * 1000,
+
+        is_active: true,
+      },
+    ]);
+
+    return res.redirect(`navisync://auth/callback?status=success`);
   } catch (err) {
     console.error(err.response?.data || err.message);
     res.status(500).json({ error: "Auth failed" });

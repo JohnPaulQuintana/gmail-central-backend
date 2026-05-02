@@ -1,0 +1,4 @@
+Password: *navisync26
+
+Project URL: https://vesxnnnrefuroescvcuv.supabase.co
+service_role: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlc3hubm5yZWZ1cm9lc2N2Y3V2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzcxNTM3NiwiZXhwIjoyMDkzMjkxMzc2fQ._IwE-6VosGLaCZcJyorAD6B-WwAUGP_ySjz_vYaADjc
