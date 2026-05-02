@@ -131,11 +131,14 @@ exports.handleCallback = async (req, res) => {
     // 3. SAVE (multi-account safe)
     const result = addAccount(app_user_id, accountData);
 
-    res.json({
-      message: "Gmail connected successfully",
-      app_user_id,
-      account: accountData,
-    });
+    // res.json({
+    //   message: "Gmail connected successfully",
+    //   app_user_id,
+    //   account: accountData,
+    // });
+    return res.redirect(
+      `navisync://auth/callback?status=success`
+    );
 
   } catch (err) {
     console.error(err.response?.data || err.message);
