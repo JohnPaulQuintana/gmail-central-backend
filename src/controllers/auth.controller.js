@@ -78,18 +78,28 @@ exports.getAuthUrl = (req, res) => {
 // HANDLE CALLBACK
 // =====================
 exports.handleCallback = async (req, res) => {
+  const startTime = Date.now();
+
+  const log = (step, extra = "") => {
+    console.log(`[NAVISYNC] ${step} +${Date.now() - startTime}ms`, extra);
+  };
+
   try {
     const { code, state } = req.query;
-
     const app_user_id = state;
 
+    log("Callback received", { app_user_id });
+
     if (!app_user_id) {
-      return res.status(400).json({
-        error: "Missing app_user_id",
-      });
+      log("ERROR: Missing app_user_id");
+      return res.status(400).json({ error: "Missing app_user_id" });
     }
 
-    // 1. Token exchange
+    // =====================
+    // 1. TOKEN EXCHANGE
+    // =====================
+    log("Starting token exchange");
+
     const tokenRes = await axios.post(
       "https://oauth2.googleapis.com/token",
       querystring.stringify({
@@ -103,21 +113,32 @@ exports.handleCallback = async (req, res) => {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
-      },
+      }
     );
 
     const tokens = tokenRes.data;
 
-    // 2. Profile
+    log("Token exchange done");
+
+    // =====================
+    // 2. GET PROFILE
+    // =====================
+    log("Fetching Google profile");
+
     const profile = await axios.get(
       "https://openidconnect.googleapis.com/v1/userinfo",
       {
         headers: {
           Authorization: `Bearer ${tokens.access_token}`,
         },
-      },
+      }
     );
 
+    log("Profile fetched", profile.data.email);
+
+    // =====================
+    // 3. BUILD ACCOUNT
+    // =====================
     const accountData = {
       google_id: profile.data.sub,
       email: profile.data.email,
@@ -134,30 +155,37 @@ exports.handleCallback = async (req, res) => {
       is_active: true,
     };
 
-    // 3. SAVE (multi-account safe)
-    await supabase.from("accounts").insert([
+    // =====================
+    // 4. SAVE TO SUPABASE
+    // =====================
+    log("Saving to Supabase");
+
+    const { data, error } = await supabase.from("accounts").insert([
       {
         user_id: app_user_id,
-
-        google_id: profile.data.sub,
-        email: profile.data.email,
-        name: profile.data.name,
-        picture: profile.data.picture,
-
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-
-        scope: tokens.scope,
-        token_type: tokens.token_type,
-        expiry_date: Date.now() + tokens.expires_in * 1000,
-
-        is_active: true,
+        ...accountData,
       },
     ]);
 
-    return res.redirect(`navisync://auth/callback?status=success`);
+    if (error) {
+      log("SUPABASE ERROR", error);
+      throw error;
+    }
+
+    log("Saved successfully");
+
+    // =====================
+    // 5. REDIRECT BACK TO APP
+    // =====================
+    log("Redirecting to app");
+
+    return res.redirect(`navisync://callback?status=success`);
+
   } catch (err) {
-    console.error(err.response?.data || err.message);
-    res.status(500).json({ error: "Auth failed" });
+    console.error("[NAVISYNC ERROR]", err.response?.data || err.message);
+
+    return res.status(500).json({
+      error: "Auth failed",
+    });
   }
 };
