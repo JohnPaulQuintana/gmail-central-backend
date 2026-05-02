@@ -1,26 +1,28 @@
 const axios = require("axios");
-const { getAccounts } = require("../db/user.db");
+const supabase = require("../db/supabase");
 const { getValidAccessToken } = require("../utils/auth.helper");
-const db = require("../db/test_db");
 
 // ==========================
-// CATEGORY ENGINE (JOB / RECEIPT / SPAM)
+// LOGGER (Render debugging)
+// ==========================
+const startTimer = () => Date.now();
+
+const log = (label, start, extra = "") => {
+  console.log(`[EMAIL-SYNC] ${label} +${Date.now() - start}ms`, extra);
+};
+
+// ==========================
+// CATEGORY ENGINE
 // ==========================
 const categorizeEmail = (from = "", subject = "", snippet = "") => {
   const text = `${from} ${subject} ${snippet}`.toLowerCase();
 
-  // ==========================
-  // JOB EMAILS
-  // ==========================
   const jobKeywords = [
     "linkedin", "indeed", "job", "career", "interview",
     "application", "hired", "position", "recruiter",
     "workday", "greenhouse", "lever", "bamboohr"
   ];
 
-  // ==========================
-  // RECEIPTS / TRANSACTIONS
-  // ==========================
   const receiptKeywords = [
     "receipt", "invoice", "order", "payment",
     "paid", "transaction", "shopee", "lazada",
@@ -28,9 +30,6 @@ const categorizeEmail = (from = "", subject = "", snippet = "") => {
     "order shipped", "maya"
   ];
 
-  // ==========================
-  // SPAM / PROMO
-  // ==========================
   const spamKeywords = [
     "unsubscribe", "promo", "promotion", "discount",
     "offer", "sale", "marketing", "newsletter",
@@ -44,12 +43,10 @@ const categorizeEmail = (from = "", subject = "", snippet = "") => {
   const receiptScore = score(receiptKeywords);
   const spamScore = score(spamKeywords);
 
-  // strong match first
   if (jobScore >= 2) return "Job";
   if (receiptScore >= 2) return "Receipt";
   if (spamScore >= 2) return "Spam";
 
-  // fallback
   if (jobScore === 1) return "Job";
   if (receiptScore === 1) return "Receipt";
   if (spamScore === 1) return "Spam";
@@ -64,39 +61,84 @@ const getHeader = (headers, name) =>
   headers.find(h => h.name === name)?.value || "";
 
 // ==========================
-// SAVE TO LOCAL INBOX DB
+// SAVE EMAIL (SUPABASE)
 // ==========================
-const saveInboxEmail = (app_user_id, email) => {
-  const user = db.users.find(u => u.user_id === app_user_id);
-  if (!user) return;
+const saveInboxEmail = async (user_id, email, start) => {
+  log("Checking duplicate email", start);
 
-  if (!user.inbox) user.inbox = [];
+  const { data: existing } = await supabase
+    .from("emails")
+    .select("id")
+    .eq("message_id", email.message_id)
+    .eq("user_id", user_id)
+    .maybeSingle();
 
-  const exists = user.inbox.find(e => e.message_id === email.message_id);
-  if (exists) return;
+  if (existing) {
+    log("Duplicate skipped", start);
+    return;
+  }
 
-  user.inbox.push({
-    ...email,
-    read: false,
-    created_at: Date.now(),
-  });
+  log("Inserting email to Supabase", start);
+
+  const { error } = await supabase.from("emails").insert([
+    {
+      user_id,
+
+      message_id: email.message_id,
+      thread_id: email.thread_id,
+
+      sender: email.from,
+      subject: email.subject,
+      snippet: email.snippet,
+      category: email.category,
+
+      account_email: email.account_email,
+      created_at: Date.now(),
+    },
+  ]);
+
+  if (error) {
+    console.log("[EMAIL-SYNC] SUPABASE ERROR", error);
+  } else {
+    log("Email saved", start);
+  }
 };
 
 // ==========================
-// GET ALL UNREAD EMAILS (ALL ACCOUNTS)
+// GET EMAILS (ALL ACCOUNTS)
 // ==========================
 exports.getEmails = async (req, res) => {
+  const start = startTimer();
+
   try {
     const { user_id } = req.params;
+    log("Start email sync", start, user_id);
 
-    const accounts = getAccounts(user_id);
+    // ==========================
+    // GET ACCOUNTS
+    // ==========================
+    log("Fetching accounts", start);
+
+    const { data: accounts, error: accErr } = await supabase
+      .from("accounts")
+      .select("*")
+      .eq("user_id", user_id);
+
+    if (accErr) throw accErr;
+
     if (!accounts.length) {
+      log("No accounts found", start);
       return res.status(404).json({ error: "No accounts found" });
     }
 
     const results = [];
 
+    // ==========================
+    // LOOP ACCOUNTS
+    // ==========================
     for (const acc of accounts) {
+      log("Processing account", start, acc.email);
+
       const token = await getValidAccessToken(acc);
 
       const gmailRes = await axios.get(
@@ -110,6 +152,11 @@ exports.getEmails = async (req, res) => {
       const messages = gmailRes.data.messages || [];
       const emails = [];
 
+      log("Messages fetched", start, messages.length);
+
+      // ==========================
+      // LOOP MESSAGES
+      // ==========================
       for (const msg of messages) {
         const detail = await axios.get(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
@@ -140,7 +187,7 @@ exports.getEmails = async (req, res) => {
           account_email: acc.email,
         };
 
-        saveInboxEmail(user_id, emailData);
+        await saveInboxEmail(user_id, emailData, start);
         emails.push(emailData);
       }
 
@@ -151,28 +198,40 @@ exports.getEmails = async (req, res) => {
       });
     }
 
+    log("Sync completed", start);
+
     res.json({
       user_id,
       accounts: results,
+      total_time_ms: Date.now() - start,
     });
 
   } catch (err) {
-    console.error(err.response?.data || err.message);
+    console.error("[EMAIL-SYNC ERROR]", err.response?.data || err.message);
     res.status(500).json({ error: "Failed to fetch emails" });
   }
 };
 
 // ==========================
-// GET SINGLE EMAIL (FIXED)
+// SINGLE EMAIL
 // ==========================
 exports.getMessageById = async (req, res) => {
+  const start = startTimer();
+
   try {
     const { user_id, email, message_id } = req.params;
 
-    const accounts = getAccounts(user_id);
+    log("Fetching single email", start);
+
+    const { data: accounts } = await supabase
+      .from("accounts")
+      .select("*")
+      .eq("user_id", user_id);
+
     const account = accounts.find(a => a.email === email);
 
     if (!account) {
+      log("Account not found", start);
       return res.status(404).json({ error: "Account not found" });
     }
 
@@ -205,10 +264,12 @@ exports.getMessageById = async (req, res) => {
       ),
     };
 
+    log("Single email fetched", start);
+
     res.json(emailData);
 
   } catch (err) {
-    console.error(err.response?.data || err.message);
+    console.error("[EMAIL ERROR]", err.response?.data || err.message);
     res.status(500).json({ error: "Failed to fetch email" });
   }
 };
@@ -216,14 +277,28 @@ exports.getMessageById = async (req, res) => {
 // ==========================
 // DEBUG USER
 // ==========================
-exports.debugUser = (req, res) => {
+exports.debugUser = async (req, res) => {
+  const start = startTimer();
+
   const { user_id } = req.params;
 
-  const user = db.users.find(u => u.user_id === user_id);
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("*")
+    .eq("user_id", user_id);
+
+  const { data: inbox } = await supabase
+    .from("emails")
+    .select("*")
+    .eq("user_id", user_id)
+    .order("created_at", { ascending: false });
+
+  log("Debug loaded", start);
 
   res.json({
     user_id,
-    accounts: getAccounts(user_id),
-    inbox: user?.inbox || [],
+    accounts,
+    inbox,
+    total: inbox?.length || 0,
   });
 };
