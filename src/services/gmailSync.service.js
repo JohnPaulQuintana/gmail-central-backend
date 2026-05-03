@@ -48,18 +48,16 @@ const categorizeEmail = (from = "", subject = "", snippet = "") => {
 const getHeader = (headers, name) =>
   headers.find((h) => h.name === name)?.value || "";
 
+// ==========================
+// SAVE EMAIL
+// ==========================
 const saveInboxEmail = async (user_id, email) => {
-  const { data: existing, error: findErr } = await supabase
+  const { data: existing } = await supabase
     .from("emails")
     .select("id")
     .eq("message_id", email.message_id)
     .eq("user_id", user_id)
     .maybeSingle();
-
-  if (findErr) {
-    console.log("[CHECK DUP ERROR]", findErr.message);
-    return;
-  }
 
   if (existing) return;
 
@@ -68,13 +66,14 @@ const saveInboxEmail = async (user_id, email) => {
       user_id,
       message_id: email.message_id,
       thread_id: email.thread_id,
+
       sender: email.from,
       subject: email.subject,
       snippet: email.snippet,
       category: email.category,
       account_email: email.account_email,
 
-      // ✅ FIX: stable timestamp for UI sorting
+      // ✅ FIXED DATE COLUMN (IMPORTANT)
       date: email.date,
 
       created_at: Date.now(),
@@ -87,7 +86,7 @@ const saveInboxEmail = async (user_id, email) => {
 };
 
 // ==========================
-// MAIN SYNC FUNCTION
+// MAIN SYNC
 // ==========================
 const syncUserEmails = async (user_id) => {
   const start = Date.now();
@@ -101,14 +100,7 @@ const syncUserEmails = async (user_id) => {
     .eq("user_id", user_id);
 
   if (accErr) throw accErr;
-
-  if (!accounts?.length) {
-    return {
-      user_id,
-      synced: 0,
-      total_time_ms: Date.now() - start,
-    };
-  }
+  if (!accounts?.length) return { user_id, synced: 0 };
 
   for (const acc of accounts) {
     const token = await getValidAccessToken(acc);
@@ -122,8 +114,6 @@ const syncUserEmails = async (user_id) => {
     );
 
     const messages = gmailRes.data.messages || [];
-
-    // 🔥 SAFE batching (avoid Gmail rate limit)
     const BATCH_SIZE = 5;
 
     for (let i = 0; i < messages.slice(0, 20).length; i += BATCH_SIZE) {
@@ -142,6 +132,8 @@ const syncUserEmails = async (user_id) => {
             const data = detail.data;
             const headers = data.payload.headers;
 
+            const rawDate = getHeader(headers, "Date");
+
             const emailData = {
               message_id: data.id,
               thread_id: data.threadId,
@@ -149,8 +141,8 @@ const syncUserEmails = async (user_id) => {
               subject: getHeader(headers, "Subject"),
               snippet: data.snippet,
 
-              // ✅ FIXED DATE (IMPORTANT FOR UI)
-              date: Date.parse(getHeader(headers, "Date")),
+              // ✅ SAFE TIMESTAMP (CRITICAL FIX)
+              date: rawDate ? new Date(rawDate).getTime() : Date.now(),
 
               category: categorizeEmail(
                 getHeader(headers, "From"),

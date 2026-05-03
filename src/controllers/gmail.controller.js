@@ -235,22 +235,22 @@ exports.getEmails = async (req, res) => {
     }
 
     // ==========================
-    // GET EMAILS (FULL CACHE)
+    // GET EMAILS
     // ==========================
     const { data: emails, error: emailErr } = await supabase
       .from("emails")
       .select("*")
       .eq("user_id", user_id)
-      .order("created_at", { ascending: false });
+      .order("date", { ascending: false }); // ✅ IMPORTANT CHANGE
 
     if (emailErr) throw emailErr;
 
     // ==========================
-    // BUILD SAME STRUCTURE AS ORIGINAL SYNC
+    // BUILD RESPONSE
     // ==========================
     const results = accounts.map((acc) => {
       const accountEmails = (emails || []).filter(
-        (e) => e.account_email === acc.email,
+        (e) => e.account_email === acc.email
       );
 
       return {
@@ -263,19 +263,17 @@ exports.getEmails = async (req, res) => {
           from: e.sender || e.from,
           to: e.to,
           subject: e.subject,
+
+          // ✅ FIXED: always use timestamp
           date: e.date,
+
           snippet: e.snippet,
-
           category: e.category,
-
           account_email: e.account_email,
         })),
       };
     });
 
-    // ==========================
-    // FINAL RESPONSE (MATCH OLD API)
-    // ==========================
     return res.json({
       user_id,
       accounts: results,
