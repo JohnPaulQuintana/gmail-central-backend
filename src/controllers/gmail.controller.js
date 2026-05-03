@@ -250,7 +250,7 @@ exports.getEmails = async (req, res) => {
     // ==========================
     const results = accounts.map((acc) => {
       const accountEmails = (emails || []).filter(
-        (e) => e.account_email === acc.email
+        (e) => e.account_email === acc.email,
       );
 
       return {
@@ -281,7 +281,6 @@ exports.getEmails = async (req, res) => {
       accounts: results,
       total_time_ms: Date.now() - start,
     });
-
   } catch (err) {
     console.error("[GET EMAILS ERROR]", err);
 
@@ -307,7 +306,7 @@ exports.getMessageById = async (req, res) => {
       .select("*")
       .eq("user_id", user_id);
 
-    const account = accounts.find(a => a.email === email);
+    const account = accounts.find((a) => a.email === email);
 
     if (!account) {
       log("Account not found", start);
@@ -320,7 +319,7 @@ exports.getMessageById = async (req, res) => {
       `https://gmail.googleapis.com/gmail/v1/users/me/messages/${message_id}?format=full`,
       {
         headers: { Authorization: `Bearer ${token}` },
-      }
+      },
     );
 
     const message = messageRes.data;
@@ -339,14 +338,13 @@ exports.getMessageById = async (req, res) => {
       category: categorizeEmail(
         getHeader(headers, "From"),
         getHeader(headers, "Subject"),
-        message.snippet
+        message.snippet,
       ),
     };
 
     log("Single email fetched", start);
 
     res.json(emailData);
-
   } catch (err) {
     console.error("[EMAIL ERROR]", err.response?.data || err.message);
     res.status(500).json({ error: "Failed to fetch email" });
@@ -365,10 +363,7 @@ exports.debugUser = async (req, res) => {
 
   // RUN BOTH QUERIES IN PARALLEL
   const [accountsRes, inboxRes] = await Promise.all([
-    supabase
-      .from("accounts")
-      .select("*")
-      .eq("user_id", user_id),
+    supabase.from("accounts").select("*").eq("user_id", user_id),
 
     supabase
       .from("emails")
