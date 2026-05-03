@@ -221,28 +221,37 @@ exports.getEmails = async (req, res) => {
     // ==========================
     // GET ACCOUNTS
     // ==========================
-    const { data: accounts } = await supabase
+    const { data: accounts, error: accErr } = await supabase
       .from("accounts")
       .select("email")
       .eq("user_id", user_id);
 
+    if (accErr) throw accErr;
+
+    if (!accounts || accounts.length === 0) {
+      return res.status(404).json({
+        error: "No accounts found",
+      });
+    }
+
     // ==========================
-    // GET EMAILS FROM CACHE
+    // GET EMAILS (CACHE)
     // ==========================
-    const { data: emails } = await supabase
+    const { data: emails, error: emailErr } = await supabase
       .from("emails")
       .select("*")
       .eq("user_id", user_id)
       .order("created_at", { ascending: false })
       .limit(50);
 
+    if (emailErr) throw emailErr;
+
     // ==========================
-    // GROUP EMAILS BY ACCOUNT (this builds "results")
+    // BUILD SAME STRUCTURE AS OLD SYNC
     // ==========================
-    const results = (accounts || []).map((acc) => {
-      const accountEmails = (emails || []).filter(
-        (e) => e.account_email === acc.email
-      );
+    const results = accounts.map((acc) => {
+      const accountEmails =
+        (emails || []).filter((e) => e.account_email === acc.email) || [];
 
       return {
         email: acc.email,
@@ -252,7 +261,7 @@ exports.getEmails = async (req, res) => {
     });
 
     // ==========================
-    // RESPONSE (YOUR TARGET FORMAT)
+    // RESPONSE (MATCH OLD FORMAT)
     // ==========================
     return res.json({
       user_id,
@@ -261,7 +270,7 @@ exports.getEmails = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("[GET EMAILS ERROR]", err.message);
+    console.error("[GET EMAILS ERROR]", err);
 
     return res.status(500).json({
       error: "Failed to fetch emails",
