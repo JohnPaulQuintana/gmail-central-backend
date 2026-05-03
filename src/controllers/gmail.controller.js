@@ -11,203 +11,224 @@ const log = (label, start, extra = "") => {
   console.log(`[EMAIL-SYNC] ${label} +${Date.now() - start}ms`, extra);
 };
 
-// ==========================
-// CATEGORY ENGINE
-// ==========================
-const categorizeEmail = (from = "", subject = "", snippet = "") => {
-  const text = `${from} ${subject} ${snippet}`.toLowerCase();
+// // ==========================
+// // CATEGORY ENGINE
+// // ==========================
+// const categorizeEmail = (from = "", subject = "", snippet = "") => {
+//   const text = `${from} ${subject} ${snippet}`.toLowerCase();
 
-  const jobKeywords = [
-    "linkedin", "indeed", "job", "career", "interview",
-    "application", "hired", "position", "recruiter",
-    "workday", "greenhouse", "lever", "bamboohr"
-  ];
+//   const jobKeywords = [
+//     "linkedin", "indeed", "job", "career", "interview",
+//     "application", "hired", "position", "recruiter",
+//     "workday", "greenhouse", "lever", "bamboohr"
+//   ];
 
-  const receiptKeywords = [
-    "receipt", "invoice", "order", "payment",
-    "paid", "transaction", "shopee", "lazada",
-    "amazon", "grab", "billing", "order confirmed",
-    "order shipped", "maya"
-  ];
+//   const receiptKeywords = [
+//     "receipt", "invoice", "order", "payment",
+//     "paid", "transaction", "shopee", "lazada",
+//     "amazon", "grab", "billing", "order confirmed",
+//     "order shipped", "maya"
+//   ];
 
-  const spamKeywords = [
-    "unsubscribe", "promo", "promotion", "discount",
-    "offer", "sale", "marketing", "newsletter",
-    "limited time", "win", "free", "crypto"
-  ];
+//   const spamKeywords = [
+//     "unsubscribe", "promo", "promotion", "discount",
+//     "offer", "sale", "marketing", "newsletter",
+//     "limited time", "win", "free", "crypto"
+//   ];
 
-  const score = (keywords) =>
-    keywords.reduce((acc, kw) => acc + (text.includes(kw) ? 1 : 0), 0);
+//   const score = (keywords) =>
+//     keywords.reduce((acc, kw) => acc + (text.includes(kw) ? 1 : 0), 0);
 
-  const jobScore = score(jobKeywords);
-  const receiptScore = score(receiptKeywords);
-  const spamScore = score(spamKeywords);
+//   const jobScore = score(jobKeywords);
+//   const receiptScore = score(receiptKeywords);
+//   const spamScore = score(spamKeywords);
 
-  if (jobScore >= 2) return "Job";
-  if (receiptScore >= 2) return "Receipt";
-  if (spamScore >= 2) return "Spam";
+//   if (jobScore >= 2) return "Job";
+//   if (receiptScore >= 2) return "Receipt";
+//   if (spamScore >= 2) return "Spam";
 
-  if (jobScore === 1) return "Job";
-  if (receiptScore === 1) return "Receipt";
-  if (spamScore === 1) return "Spam";
+//   if (jobScore === 1) return "Job";
+//   if (receiptScore === 1) return "Receipt";
+//   if (spamScore === 1) return "Spam";
 
-  return "Others";
-};
+//   return "Others";
+// };
 
-// ==========================
-// HEADER HELPER
-// ==========================
-const getHeader = (headers, name) =>
-  headers.find(h => h.name === name)?.value || "";
+// // ==========================
+// // HEADER HELPER
+// // ==========================
+// const getHeader = (headers, name) =>
+//   headers.find(h => h.name === name)?.value || "";
 
-// ==========================
-// SAVE EMAIL (SUPABASE)
-// ==========================
-const saveInboxEmail = async (user_id, email, start) => {
-  log("Checking duplicate email", start);
+// // ==========================
+// // SAVE EMAIL (SUPABASE)
+// // ==========================
+// const saveInboxEmail = async (user_id, email, start) => {
+//   log("Checking duplicate email", start);
 
-  const { data: existing } = await supabase
-    .from("emails")
-    .select("id")
-    .eq("message_id", email.message_id)
-    .eq("user_id", user_id)
-    .maybeSingle();
+//   const { data: existing } = await supabase
+//     .from("emails")
+//     .select("id")
+//     .eq("message_id", email.message_id)
+//     .eq("user_id", user_id)
+//     .maybeSingle();
 
-  if (existing) {
-    log("Duplicate skipped", start);
-    return;
-  }
+//   if (existing) {
+//     log("Duplicate skipped", start);
+//     return;
+//   }
 
-  log("Inserting email to Supabase", start);
+//   log("Inserting email to Supabase", start);
 
-  const { error } = await supabase.from("emails").insert([
-    {
-      user_id,
+//   const { error } = await supabase.from("emails").insert([
+//     {
+//       user_id,
 
-      message_id: email.message_id,
-      thread_id: email.thread_id,
+//       message_id: email.message_id,
+//       thread_id: email.thread_id,
 
-      sender: email.from,
-      subject: email.subject,
-      snippet: email.snippet,
-      category: email.category,
+//       sender: email.from,
+//       subject: email.subject,
+//       snippet: email.snippet,
+//       category: email.category,
 
-      account_email: email.account_email,
-      created_at: Date.now(),
-    },
-  ]);
+//       account_email: email.account_email,
+//       created_at: Date.now(),
+//     },
+//   ]);
 
-  if (error) {
-    console.log("[EMAIL-SYNC] SUPABASE ERROR", error);
-  } else {
-    log("Email saved", start);
-  }
-};
+//   if (error) {
+//     console.log("[EMAIL-SYNC] SUPABASE ERROR", error);
+//   } else {
+//     log("Email saved", start);
+//   }
+// };
 
-// ==========================
-// GET EMAILS (ALL ACCOUNTS)
-// ==========================
+// // ==========================
+// // GET EMAILS (ALL ACCOUNTS)
+// // ==========================
+// exports.getEmails = async (req, res) => {
+//   const start = startTimer();
+
+//   try {
+//     const { user_id } = req.params;
+//     log("Start email sync", start, user_id);
+
+//     // ==========================
+//     // GET ACCOUNTS
+//     // ==========================
+//     log("Fetching accounts", start);
+
+//     const { data: accounts, error: accErr } = await supabase
+//       .from("accounts")
+//       .select("*")
+//       .eq("user_id", user_id);
+
+//     if (accErr) throw accErr;
+
+//     if (!accounts.length) {
+//       log("No accounts found", start);
+//       return res.status(404).json({ error: "No accounts found" });
+//     }
+
+//     const results = [];
+
+//     // ==========================
+//     // LOOP ACCOUNTS
+//     // ==========================
+//     for (const acc of accounts) {
+//       log("Processing account", start, acc.email);
+
+//       const token = await getValidAccessToken(acc);
+
+//       const gmailRes = await axios.get(
+//         "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+//         {
+//           headers: { Authorization: `Bearer ${token}` },
+//           params: { q: "is:unread" },
+//         }
+//       );
+
+//       const messages = gmailRes.data.messages || [];
+//       const emails = [];
+
+//       log("Messages fetched", start, messages.length);
+
+//       // ==========================
+//       // LOOP MESSAGES
+//       // ==========================
+//       for (const msg of messages) {
+//         const detail = await axios.get(
+//           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
+//           {
+//             headers: { Authorization: `Bearer ${token}` },
+//           }
+//         );
+
+//         const data = detail.data;
+//         const headers = data.payload.headers;
+
+//         const emailData = {
+//           message_id: data.id,
+//           thread_id: data.threadId,
+
+//           from: getHeader(headers, "From"),
+//           to: getHeader(headers, "To"),
+//           subject: getHeader(headers, "Subject"),
+//           date: getHeader(headers, "Date"),
+//           snippet: data.snippet,
+
+//           category: categorizeEmail(
+//             getHeader(headers, "From"),
+//             getHeader(headers, "Subject"),
+//             data.snippet
+//           ),
+
+//           account_email: acc.email,
+//         };
+
+//         await saveInboxEmail(user_id, emailData, start);
+//         emails.push(emailData);
+//       }
+
+//       results.push({
+//         email: acc.email,
+//         unread_count: messages.length,
+//         emails,
+//       });
+//     }
+
+//     log("Sync completed", start);
+
+//     res.json({
+//       user_id,
+//       accounts: results,
+//       total_time_ms: Date.now() - start,
+//     });
+
+//   } catch (err) {
+//     console.error("[EMAIL-SYNC ERROR]", err.response?.data || err.message);
+//     res.status(500).json({ error: "Failed to fetch emails" });
+//   }
+// };
+
 exports.getEmails = async (req, res) => {
-  const start = startTimer();
-
   try {
     const { user_id } = req.params;
-    log("Start email sync", start, user_id);
 
-    // ==========================
-    // GET ACCOUNTS
-    // ==========================
-    log("Fetching accounts", start);
-
-    const { data: accounts, error: accErr } = await supabase
-      .from("accounts")
+    const { data: emails } = await supabase
+      .from("emails")
       .select("*")
-      .eq("user_id", user_id);
+      .eq("user_id", user_id)
+      .order("created_at", { ascending: false })
+      .limit(50);
 
-    if (accErr) throw accErr;
-
-    if (!accounts.length) {
-      log("No accounts found", start);
-      return res.status(404).json({ error: "No accounts found" });
-    }
-
-    const results = [];
-
-    // ==========================
-    // LOOP ACCOUNTS
-    // ==========================
-    for (const acc of accounts) {
-      log("Processing account", start, acc.email);
-
-      const token = await getValidAccessToken(acc);
-
-      const gmailRes = await axios.get(
-        "https://gmail.googleapis.com/gmail/v1/users/me/messages",
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { q: "is:unread" },
-        }
-      );
-
-      const messages = gmailRes.data.messages || [];
-      const emails = [];
-
-      log("Messages fetched", start, messages.length);
-
-      // ==========================
-      // LOOP MESSAGES
-      // ==========================
-      for (const msg of messages) {
-        const detail = await axios.get(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-
-        const data = detail.data;
-        const headers = data.payload.headers;
-
-        const emailData = {
-          message_id: data.id,
-          thread_id: data.threadId,
-
-          from: getHeader(headers, "From"),
-          to: getHeader(headers, "To"),
-          subject: getHeader(headers, "Subject"),
-          date: getHeader(headers, "Date"),
-          snippet: data.snippet,
-
-          category: categorizeEmail(
-            getHeader(headers, "From"),
-            getHeader(headers, "Subject"),
-            data.snippet
-          ),
-
-          account_email: acc.email,
-        };
-
-        await saveInboxEmail(user_id, emailData, start);
-        emails.push(emailData);
-      }
-
-      results.push({
-        email: acc.email,
-        unread_count: messages.length,
-        emails,
-      });
-    }
-
-    log("Sync completed", start);
-
-    res.json({
-      user_id,
-      accounts: results,
-      total_time_ms: Date.now() - start,
+    return res.json({
+      emails,
+      from_cache: true,
     });
 
   } catch (err) {
-    console.error("[EMAIL-SYNC ERROR]", err.response?.data || err.message);
     res.status(500).json({ error: "Failed to fetch emails" });
   }
 };

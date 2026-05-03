@@ -5,6 +5,7 @@ const axios = require("axios");
 // const { v4: uuidv4 } = require("uuid");
 // DATABASE SUPABASE
 const supabase = require("../db/supabase");
+const { syncUserEmails } = require("../services/gmailSync.service");
 // =====================
 // APP LOGIN (temporary simple auth)
 // =====================
@@ -173,6 +174,9 @@ exports.handleCallback = async (req, res) => {
     }
 
     log("Saved successfully");
+
+    // after saving account
+    syncUserEmails(app_user_id); // FIRE AND FORGET
 
     // =====================
     // 5. REDIRECT BACK TO APP
