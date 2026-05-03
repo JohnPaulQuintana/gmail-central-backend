@@ -213,9 +213,22 @@ const log = (label, start, extra = "") => {
 // };
 
 exports.getEmails = async (req, res) => {
+  const start = Date.now();
+
   try {
     const { user_id } = req.params;
 
+    // ==========================
+    // GET ACCOUNTS
+    // ==========================
+    const { data: accounts } = await supabase
+      .from("accounts")
+      .select("email")
+      .eq("user_id", user_id);
+
+    // ==========================
+    // GET EMAILS FROM CACHE
+    // ==========================
     const { data: emails } = await supabase
       .from("emails")
       .select("*")
@@ -223,16 +236,38 @@ exports.getEmails = async (req, res) => {
       .order("created_at", { ascending: false })
       .limit(50);
 
+    // ==========================
+    // GROUP EMAILS BY ACCOUNT (this builds "results")
+    // ==========================
+    const results = (accounts || []).map((acc) => {
+      const accountEmails = (emails || []).filter(
+        (e) => e.account_email === acc.email
+      );
+
+      return {
+        email: acc.email,
+        unread_count: accountEmails.length,
+        emails: accountEmails,
+      };
+    });
+
+    // ==========================
+    // RESPONSE (YOUR TARGET FORMAT)
+    // ==========================
     return res.json({
-      emails,
-      from_cache: true,
+      user_id,
+      accounts: results,
+      total_time_ms: Date.now() - start,
     });
 
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch emails" });
+    console.error("[GET EMAILS ERROR]", err.message);
+
+    return res.status(500).json({
+      error: "Failed to fetch emails",
+    });
   }
 };
-
 // ==========================
 // SINGLE EMAIL
 // ==========================
