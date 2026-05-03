@@ -235,23 +235,23 @@ exports.getEmails = async (req, res) => {
     }
 
     // ==========================
-    // GET EMAILS (CACHE)
+    // GET ALL EMAILS (CACHE)
     // ==========================
     const { data: emails, error: emailErr } = await supabase
       .from("emails")
       .select("*")
       .eq("user_id", user_id)
-      .order("created_at", { ascending: false })
-      .limit(50);
+      .order("created_at", { ascending: false });
 
     if (emailErr) throw emailErr;
 
     // ==========================
-    // BUILD SAME STRUCTURE AS OLD SYNC
+    // GROUP LIKE ORIGINAL SYNC FLOW
     // ==========================
     const results = accounts.map((acc) => {
-      const accountEmails =
-        (emails || []).filter((e) => e.account_email === acc.email) || [];
+      const accountEmails = (emails || []).filter(
+        (e) => e.account_email === acc.email
+      );
 
       return {
         email: acc.email,
@@ -260,9 +260,6 @@ exports.getEmails = async (req, res) => {
       };
     });
 
-    // ==========================
-    // RESPONSE (MATCH OLD FORMAT)
-    // ==========================
     return res.json({
       user_id,
       accounts: results,
