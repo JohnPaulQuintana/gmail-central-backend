@@ -235,7 +235,7 @@ exports.getEmails = async (req, res) => {
     }
 
     // ==========================
-    // GET ALL EMAILS (CACHE)
+    // GET EMAILS (FULL CACHE)
     // ==========================
     const { data: emails, error: emailErr } = await supabase
       .from("emails")
@@ -246,7 +246,7 @@ exports.getEmails = async (req, res) => {
     if (emailErr) throw emailErr;
 
     // ==========================
-    // GROUP LIKE ORIGINAL SYNC FLOW
+    // BUILD SAME STRUCTURE AS ORIGINAL SYNC
     // ==========================
     const results = accounts.map((acc) => {
       const accountEmails = (emails || []).filter(
@@ -256,10 +256,26 @@ exports.getEmails = async (req, res) => {
       return {
         email: acc.email,
         unread_count: accountEmails.length,
-        emails: accountEmails,
+        emails: accountEmails.map((e) => ({
+          message_id: e.message_id,
+          thread_id: e.thread_id,
+
+          from: e.sender || e.from,
+          to: e.to,
+          subject: e.subject,
+          date: e.date,
+          snippet: e.snippet,
+
+          category: e.category,
+
+          account_email: e.account_email,
+        })),
       };
     });
 
+    // ==========================
+    // FINAL RESPONSE (MATCH OLD API)
+    // ==========================
     return res.json({
       user_id,
       accounts: results,
@@ -274,6 +290,7 @@ exports.getEmails = async (req, res) => {
     });
   }
 };
+
 // ==========================
 // SINGLE EMAIL
 // ==========================
