@@ -1,34 +1,8 @@
-const seen = new Map(); // 🔥 safer than Set
-
-const TTL = 1000 * 60 * 10; // 10 minutes cache
+const supabase = require("./supabase");
 
 function classifyNotification(title = "", text = "", app = "") {
   const content = `${title} ${text} ${app}`.toLowerCase();
 
-  // 🔥 JOB
-  if (
-    content.includes("job") ||
-    content.includes("hiring") ||
-    content.includes("apply") ||
-    content.includes("career") ||
-    content.includes("interview")
-  ) {
-    return "Job";
-  }
-
-  // 💰 RECEIPT / FINANCE
-  if (
-    content.includes("receipt") ||
-    content.includes("paid") ||
-    content.includes("invoice") ||
-    content.includes("transaction") ||
-    content.includes("payment") ||
-    content.includes("order")
-  ) {
-    return "Receipt";
-  }
-
-  // 🚫 SPAM
   if (
     content.includes("win") ||
     content.includes("lottery") ||
@@ -40,17 +14,34 @@ function classifyNotification(title = "", text = "", app = "") {
     return "Spam";
   }
 
-  // 👥 SOCIAL
   if (
-    app.includes("gmail") ||
+    content.includes("receipt") ||
+    content.includes("paid") ||
+    content.includes("invoice") ||
+    content.includes("transaction") ||
+    content.includes("payment") ||
+    content.includes("order")
+  ) {
+    return "Receipt";
+  }
+
+  if (
+    content.includes("job") ||
+    content.includes("hiring") ||
+    content.includes("apply") ||
+    content.includes("career") ||
+    content.includes("interview")
+  ) {
+    return "Job";
+  }
+
+  if (
     app.includes("whatsapp") ||
     app.includes("messenger") ||
     app.includes("telegram") ||
-    app.includes("messaging") ||
+    app.includes("gmail") ||
     app.includes("sms") ||
-    app.includes("mms") ||
-    app.includes("android.messaging") ||
-    app.includes("com.google.android.apps.messaging")
+    app.includes("messaging")
   ) {
     return "Social";
   }
@@ -62,34 +53,27 @@ exports.captured = async (req, res) => {
   try {
     const { package, title, text, time } = req.body;
 
-    const key = `${package}|${title}|${text}|${time}`;
-    const now = Date.now();
-
-    // 🔥 DEDUPLICATION
-    if (seen.has(key)) {
-      return res.status(200).json({ skipped: true });
-    }
-
-    seen.set(key, now);
-
-    // 🧹 CLEANUP OLD ENTRIES (prevents memory leak)
-    for (let [k, t] of seen.entries()) {
-      if (now - t > TTL) {
-        seen.delete(k);
-      }
-    }
-
     const category = classifyNotification(title, text, package);
 
     const notification = {
       app: package,
       title: title || "No Title",
       preview: text || "",
+      category,
       timestamp: time,
-      category: category,
     };
 
-    console.log("📥 CLASSIFIED NOTIFICATION:");
+    // 💾 SAVE TO SUPABASE
+    const { data, error } = await supabase
+      .from("notifications")
+      .insert([notification]);
+
+    if (error) {
+      console.error("SUPABASE ERROR:", error);
+      return res.status(500).json({ success: false, error });
+    }
+
+    console.log("💾 SAVED TO SUPABASE:");
     console.log(notification);
 
     return res.status(200).json({
