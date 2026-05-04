@@ -51,9 +51,9 @@ function classifyNotification(title = "", text = "", app = "") {
 
 exports.captured = async (req, res) => {
   try {
-    const { package, title, text, time } = req.body;
+    const { appPackage, title, text, time } = req.body;
 
-    const category = classifyNotification(title, text, package);
+    const category = classifyNotification(title, text, appPackage);
 
     const notification = {
       app: package,
