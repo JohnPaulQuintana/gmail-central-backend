@@ -1,4 +1,4 @@
-const supabase = require("./supabase");
+const supabase = require("../db/supabase");
 
 function classifyNotification(title = "", text = "", app = "") {
   const content = `${title} ${text} ${app}`.toLowerCase();
