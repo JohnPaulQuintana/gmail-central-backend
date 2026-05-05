@@ -43,6 +43,7 @@ function classifyNotification(title = "", text = "", app = "") {
 
 exports.captured = async (req, res) => {
   try {
+    console.log("🔥 RAW REQUEST BODY:", req.body);
     const { clientId, appPackage, title, text, time } = req.body;
 
     const category = classifyNotification(title, text, appPackage);
