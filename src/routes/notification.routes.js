@@ -3,6 +3,6 @@ const notificationController = require("../controllers/notification.controller")
 
 // App auth (NEW)
 router.post("/captured", notificationController.captured);
-router.post("/history", notificationController.getNotifications);
+router.get("/history", notificationController.getNotifications);
 
 module.exports = router;
