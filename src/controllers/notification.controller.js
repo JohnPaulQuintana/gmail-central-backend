@@ -42,24 +42,45 @@ function classifyNotification(title = "", text = "", app = "") {
 }
 
 exports.captured = async (req, res) => {
+  const startTime = Date.now();
+
   try {
+    console.log("\n==================== NEW REQUEST ====================");
+    console.log("Time:", new Date().toISOString());
+    console.log("Body size:", Array.isArray(req.body) ? req.body.length : "NOT ARRAY");
+    console.log("IP:", req.ip);
+    console.log("Headers:", {
+      "content-type": req.headers["content-type"],
+      "user-agent": req.headers["user-agent"]
+    });
+
     const notifications = req.body;
 
     if (!Array.isArray(notifications)) {
+      console.log("INVALID PAYLOAD:", notifications);
       return res.status(400).json({
         success: false,
         error: "Payload must be an array"
       });
     }
 
-    const formatted = notifications.map(n => ({
-      client_id: n.clientId,
-      app: n.appPackage,
-      title: n.title || "No Title",
-      preview: n.text || "",
-      category: classifyNotification(n.title, n.text, n.appPackage),
-      timestamp: n.time
-    }));
+    console.log("RAW REQUEST BODY:", JSON.stringify(notifications, null, 2));
+
+    const formatted = notifications.map((n, index) => {
+      const mapped = {
+        client_id: n.clientId,
+        app: n.appPackage,
+        title: n.title || "No Title",
+        preview: n.text || "",
+        category: classifyNotification(n.title, n.text, n.appPackage),
+        timestamp: n.time
+      };
+
+      console.log(`MAPPED [${index}]:`, mapped);
+      return mapped;
+    });
+
+    console.log("UPSERT START - COUNT:", formatted.length);
 
     const { data, error } = await supabase
       .from("notifications")
@@ -68,9 +89,17 @@ exports.captured = async (req, res) => {
       });
 
     if (error) {
-      console.error("SUPABASE ERROR:", error);
-      return res.status(500).json({ success: false, error });
+      console.log("SUPABASE ERROR FULL:", JSON.stringify(error, null, 2));
+      return res.status(500).json({
+        success: false,
+        error
+      });
     }
+
+    console.log("UPSERT SUCCESS");
+    console.log("Inserted batch size:", formatted.length);
+    console.log("Duration:", Date.now() - startTime, "ms");
+    console.log("==================== END REQUEST ====================\n");
 
     return res.status(200).json({
       success: true,
@@ -78,7 +107,7 @@ exports.captured = async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
+    console.log("UNHANDLED ERROR:", err);
     return res.status(500).json({ success: false });
   }
 };
