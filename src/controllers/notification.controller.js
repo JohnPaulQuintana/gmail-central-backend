@@ -47,32 +47,29 @@ exports.captured = async (req, res) => {
   try {
     console.log("\n==================== NEW REQUEST ====================");
     console.log("Time:", new Date().toISOString());
-    console.log("Body size:", Array.isArray(req.body) ? req.body.length : "NOT ARRAY");
-    console.log("IP:", req.ip);
-    console.log("Headers:", {
-      "content-type": req.headers["content-type"],
-      "user-agent": req.headers["user-agent"]
-    });
 
     const notifications = req.body;
 
     if (!Array.isArray(notifications)) {
-      console.log("INVALID PAYLOAD:", notifications);
       return res.status(400).json({
         success: false,
         error: "Payload must be an array"
       });
     }
 
-    console.log("RAW REQUEST BODY:", JSON.stringify(notifications, null, 2));
-
     const formatted = notifications.map((n, index) => {
       const mapped = {
+        user_id: n.user_id,
+        device_id: n.device_id,
+
         client_id: n.clientId,
-        app: n.appPackage,
+        package_name: n.appPackage,
+
         title: n.title || "No Title",
-        preview: n.text || "",
+        text: n.text || "",
+
         category: classifyNotification(n.title, n.text, n.appPackage),
+
         timestamp: n.time
       };
 
@@ -82,14 +79,14 @@ exports.captured = async (req, res) => {
 
     console.log("UPSERT START - COUNT:", formatted.length);
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("notifications")
       .upsert(formatted, {
-        onConflict: "client_id"
+        onConflict: "user_id,client_id"
       });
 
     if (error) {
-      console.log("SUPABASE ERROR FULL:", JSON.stringify(error, null, 2));
+      console.log("SUPABASE ERROR:", error);
       return res.status(500).json({
         success: false,
         error
@@ -97,9 +94,7 @@ exports.captured = async (req, res) => {
     }
 
     console.log("UPSERT SUCCESS");
-    console.log("Inserted batch size:", formatted.length);
     console.log("Duration:", Date.now() - startTime, "ms");
-    console.log("==================== END REQUEST ====================\n");
 
     return res.status(200).json({
       success: true,
