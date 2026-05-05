@@ -43,24 +43,27 @@ function classifyNotification(title = "", text = "", app = "") {
 
 exports.captured = async (req, res) => {
   try {
-    console.log("🔥 RAW REQUEST BODY:", req.body);
-    const { clientId, appPackage, title, text, time } = req.body;
+    const notifications = req.body;
 
-    const category = classifyNotification(title, text, appPackage);
+    if (!Array.isArray(notifications)) {
+      return res.status(400).json({
+        success: false,
+        error: "Payload must be an array"
+      });
+    }
 
-    const notification = {
-      client_id: clientId,      // ✅ IMPORTANT (for deduplication)
-      app: appPackage,          // ✅ FIXED (was "package")
-      title: title || "No Title",
-      preview: text || "",
-      category,
-      timestamp: time,
-    };
+    const formatted = notifications.map(n => ({
+      client_id: n.clientId,
+      app: n.appPackage,
+      title: n.title || "No Title",
+      preview: n.text || "",
+      category: classifyNotification(n.title, n.text, n.appPackage),
+      timestamp: n.time
+    }));
 
-    // 🔥 UPSERT (prevents duplicates)
     const { data, error } = await supabase
       .from("notifications")
-      .upsert([notification], {
+      .upsert(formatted, {
         onConflict: "client_id"
       });
 
@@ -69,12 +72,9 @@ exports.captured = async (req, res) => {
       return res.status(500).json({ success: false, error });
     }
 
-    console.log("💾 UPSERT SUCCESS:");
-    console.log(notification);
-
     return res.status(200).json({
       success: true,
-      data: notification,
+      inserted: formatted.length
     });
 
   } catch (err) {
