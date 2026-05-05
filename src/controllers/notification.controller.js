@@ -59,8 +59,8 @@ exports.captured = async (req, res) => {
 
     const formatted = notifications.map((n, index) => {
       const mapped = {
-        user_id: n.user_id,
-        device_id: n.device_id,
+        user_id: n.userId,
+        device_id: n.deviceId,
 
         client_id: n.clientId,
         package_name: n.appPackage,
