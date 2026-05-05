@@ -10,7 +10,8 @@ function classifyNotification(title = "", text = "", app = "") {
     content.includes("claim") ||
     content.includes("urgent") ||
     content.includes("click here")
-  ) return "Spam";
+  )
+    return "Spam";
 
   if (
     content.includes("receipt") ||
@@ -19,7 +20,8 @@ function classifyNotification(title = "", text = "", app = "") {
     content.includes("transaction") ||
     content.includes("payment") ||
     content.includes("order")
-  ) return "Receipt";
+  )
+    return "Receipt";
 
   if (
     content.includes("job") ||
@@ -27,7 +29,8 @@ function classifyNotification(title = "", text = "", app = "") {
     content.includes("apply") ||
     content.includes("career") ||
     content.includes("interview")
-  ) return "Job";
+  )
+    return "Job";
 
   if (
     app.includes("whatsapp") ||
@@ -36,11 +39,13 @@ function classifyNotification(title = "", text = "", app = "") {
     app.includes("gmail") ||
     app.includes("sms") ||
     app.includes("messaging")
-  ) return "Social";
+  )
+    return "Social";
 
   return "Social";
 }
 
+//  save notification
 exports.captured = async (req, res) => {
   const startTime = Date.now();
 
@@ -53,7 +58,7 @@ exports.captured = async (req, res) => {
     if (!Array.isArray(notifications)) {
       return res.status(400).json({
         success: false,
-        error: "Payload must be an array"
+        error: "Payload must be an array",
       });
     }
 
@@ -70,7 +75,7 @@ exports.captured = async (req, res) => {
 
         category: classifyNotification(n.title, n.text, n.appPackage),
 
-        timestamp: n.time
+        timestamp: n.time,
       };
 
       console.log(`MAPPED [${index}]:`, mapped);
@@ -79,17 +84,15 @@ exports.captured = async (req, res) => {
 
     console.log("UPSERT START - COUNT:", formatted.length);
 
-    const { error } = await supabase
-      .from("notifications")
-      .upsert(formatted, {
-        onConflict: "user_id,client_id"
-      });
+    const { error } = await supabase.from("notifications").upsert(formatted, {
+      onConflict: "user_id,client_id",
+    });
 
     if (error) {
       console.log("SUPABASE ERROR:", error);
       return res.status(500).json({
         success: false,
-        error
+        error,
       });
     }
 
@@ -98,9 +101,47 @@ exports.captured = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      inserted: formatted.length
+      inserted: formatted.length,
     });
+  } catch (err) {
+    console.log("UNHANDLED ERROR:", err);
+    return res.status(500).json({ success: false });
+  }
+};
 
+// collect notification
+exports.getNotifications = async (req, res) => {
+  try {
+    const { user_id, category } = req.query;
+
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        error: "user_id is required",
+      });
+    }
+
+    let query = supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", user_id)
+      .order("timestamp", { ascending: false });
+
+    if (category && category !== "All") {
+      query = query.eq("category", category);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.log("FETCH ERROR:", error);
+      return res.status(500).json({ success: false, error });
+    }
+
+    return res.status(200).json({
+      success: true,
+      notifications: data,
+    });
   } catch (err) {
     console.log("UNHANDLED ERROR:", err);
     return res.status(500).json({ success: false });
