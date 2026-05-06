@@ -11,17 +11,17 @@ function extractReference(text) {
   for (const line of lines) {
     const lower = line.toLowerCase();
 
-    // detect reference line
+    // stricter detection
     if (
       lower.startsWith("ref") ||
-      lower.includes("reference") ||
-      lower.includes("trx")
+      lower.startsWith("reference") ||
+      lower.startsWith("trx")
     ) {
-      // split by colon
-      const parts = line.split(":");
+      const colonIndex = line.indexOf(":");
 
-      if (parts.length > 1) {
-        return parts[1].trim().split(" ")[0]; // first token only
+      if (colonIndex !== -1) {
+        const value = line.slice(colonIndex + 1).trim();
+        return value.split(/\s+/)[0];
       }
     }
   }
@@ -64,24 +64,44 @@ function parseReceipt(text) {
   }
 
   // fallback
+  // fallback
   const amount = text.match(/PHP\s?([\d,]+\.\d{2})/i);
 
-const merchant = text.match(
-  /(?:to|from|at)\s+(.+?)(?=\s+(?:via|on|php|ref|balance)|\n|$)/i
-);
+  const merchantMatch = text.match(
+    /(?:to|from|at)\s+(.+?)(?=\s+(?:via|on|php|ref|balance)|\n|$)/i,
+  );
+
+  const rawMerchant = merchantMatch?.[1]?.trim() || null;
+
+  let merchantName = rawMerchant;
+
+  if (merchantName) {
+    merchantName = merchantName.replace(/\bon\s.+$/i, "");
+    merchantName = merchantName.replace(/[.,]$/, "").trim();
+  }
+
+  const normalizedMerchant = merchantName
+    ? normalizeMerchant(merchantName)
+    : null;
 
   const balance = text.match(
     /(?:available\s+)?balance[:\s]+PHP\s?([\d,]+\.\d{2})/i,
   );
 
-  const reference = extractReference(text);
+  let reference = extractReference(text);
+
+  // optional fallback for numeric refs (GCash)
+  if (!reference) {
+    reference = text.match(/\b\d{8,}\b/)?.[0] || null;
+  }
 
   const rawDate = extractDate(text);
 
   return {
     source,
     amount: amount?.[1]?.replace(/,/g, "") || null,
-    merchant: merchant?.[1]?.trim() || null,
+    merchant: normalizedMerchant,
+    merchant_raw: rawMerchant,
     balance: balance?.[1]?.replace(/,/g, "") || null,
     reference,
     raw_date: rawDate,
