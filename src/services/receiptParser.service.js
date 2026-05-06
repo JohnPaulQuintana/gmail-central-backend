@@ -41,23 +41,32 @@ function parseReceipt(text) {
 
   // fallback
   const amount = text.match(/PHP\s?([\d,]+\.\d{2})/i);
-  const merchant = text.match(/(?:at|from|to)\s(.+?)(?:\s|$)/i);
-  const balance = text.match(/balance[:\s]+PHP\s?([\d,]+\.\d{2})/i);
-  const reference = text.match(
-    /(?:^|\n)\s*(?:ref(?:erence)?\s*(?:no\.?|number)?|trx|transaction\s*ref(?:erence)?)\s*[:#-]?\s*([^\n]+)/i
-  );
 
-  const rawDate = extractDate(text);
+const merchant = text.match(
+  /(?:to|from|at)\s+(.+?)(?=\s+via|\n|$)/i
+);
 
-  return {
-    source,
-    amount: amount?.[1]?.replace(/,/g, "") || null,
-    merchant: merchant?.[1] || null,
-    balance: balance?.[1] || null,
-    reference: reference?.[1] || null,
-    raw_date: rawDate,
-    transaction_time: parseToISO(rawDate),
-  };
+const balance = text.match(
+  /(?:available\s+)?balance[:\s]+PHP\s?([\d,]+\.\d{2})/i
+);
+
+const referenceMatch = text.match(
+  /(?:^|\n)\s*(?:ref(?:erence)?\s*(?:no\.?|number)?|trx|transaction\s*ref(?:erence)?)\s*[:#-]?\s*([^\n]+)/i
+);
+
+const reference = referenceMatch?.[1]?.trim()?.split(/\s+/)[0] || null;
+
+const rawDate = extractDate(text);
+
+return {
+  source,
+  amount: amount?.[1]?.replace(/,/g, "") || null,
+  merchant: merchant?.[1]?.trim() || null,
+  balance: balance?.[1]?.replace(/,/g, "") || null,
+  reference,
+  raw_date: rawDate,
+  transaction_time: parseToISO(rawDate),
+};
 }
 
 module.exports = { parseReceipt };
