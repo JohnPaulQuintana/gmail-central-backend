@@ -3,7 +3,7 @@ async function geminiExtract(text) {
     const prompt = `
 You are a receipt parser.
 
-Return ONLY valid JSON. No markdown. No text.
+Return ONLY valid JSON.
 
 Schema:
 {
@@ -12,11 +12,6 @@ Schema:
   "balance": string|null,
   "reference": string|null
 }
-
-Rules:
-- Do NOT include explanations
-- Do NOT wrap in code blocks
-- If unknown, return null
 
 TEXT:
 ${text}
@@ -29,30 +24,38 @@ ${text}
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json"
+          }
         }),
       }
     );
 
     const data = await res.json();
 
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    console.log("FULL GEMINI RESPONSE:", JSON.stringify(data, null, 2));
+
+    if (data.error) {
+      console.error("Gemini API Error:", data.error.message);
+      return null;
+    }
+
+    const raw =
+      data?.candidates?.[0]?.content?.parts?.find(p => p.text)?.text || null;
 
     console.log("RAW GEMINI OUTPUT:", raw);
 
     if (!raw) return null;
 
-    // CLEAN HARD (IMPORTANT)
-    const cleaned = raw
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
-
-    return JSON.parse(cleaned);
+    try {
+      return JSON.parse(raw.trim());
+    } catch (e) {
+      console.error("Invalid JSON from Gemini:", raw);
+      return null;
+    }
 
   } catch (err) {
     console.error("Gemini parse error:", err.message);
     return null;
   }
 }
-
-module.exports = { geminiExtract };
