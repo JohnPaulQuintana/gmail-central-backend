@@ -87,41 +87,29 @@ exports.shared = async (req, res) => {
 
 exports.getTransactions = async (req, res) => {
   try {
-    const userId = req.query.userId; // or req.user.id if auth later
+    const { user_id, category } = req.query;
 
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing userId",
-      });
-    }
-
-    const { data, error } = await supabase
+    let query = supabase
       .from("transactions")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", user_id)
       .order("transaction_time", { ascending: false });
 
-    if (error) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to fetch transactions",
-        error: error.message,
-      });
+    if (category && category !== "All") {
+      query = query.eq("source", category);
     }
 
-    return res.status(200).json({
+    const { data, error } = await query;
+
+    if (error) {
+      return res.status(500).json({ success: false, error });
+    }
+
+    return res.json({
       success: true,
-      count: data.length,
       data,
     });
-
-  } catch (error) {
-    console.error(error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+  } catch (err) {
+    return res.status(500).json({ success: false });
   }
 };
