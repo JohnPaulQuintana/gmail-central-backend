@@ -84,3 +84,44 @@ exports.shared = async (req, res) => {
     });
   }
 };
+
+exports.getTransactions = async (req, res) => {
+  try {
+    const userId = req.query.userId; // or req.user.id if auth later
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing userId",
+      });
+    }
+
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("user_id", userId)
+      .order("transaction_time", { ascending: false });
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch transactions",
+        error: error.message,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: data.length,
+      data,
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
