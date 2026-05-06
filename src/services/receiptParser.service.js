@@ -52,6 +52,19 @@ function parseReceipt(text) {
 
   // valid parser result
   if (parsed && (parsed.amount || parsed.merchant)) {
+    // ✅ FIX reference
+    if (!parsed.reference || parsed.reference.toLowerCase() === "no") {
+      let ref = extractReference(text);
+
+      if (!ref) {
+        ref =
+          text.match(/MAYA-\d+/i)?.[0] || text.match(/\b\d{8,}\b/)?.[0] || null;
+      }
+
+      parsed.reference = ref;
+    }
+
+    // classification
     if (parsed.merchant) {
       const normalized = normalizeMerchant(parsed.merchant);
       const classification = classifyMerchant(normalized);
@@ -63,7 +76,6 @@ function parseReceipt(text) {
     return parsed;
   }
 
-  // fallback
   // fallback
   const amount = text.match(/PHP\s?([\d,]+\.\d{2})/i);
 
