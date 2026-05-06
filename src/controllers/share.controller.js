@@ -5,7 +5,7 @@ exports.shared = async (req, res) => {
   const startTime = Date.now();
 
   try {
-    const { text, deviceId } = req.body;
+    const { text, deviceId, userId } = req.body;
 
     // 🔥 IMPORTANT: get trusted user from auth middleware
     const userId = req.user?.id;
