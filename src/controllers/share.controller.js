@@ -8,7 +8,7 @@ exports.shared = async (req, res) => {
     const { text, deviceId, userId } = req.body;
 
     // 🔥 IMPORTANT: get trusted user from auth middleware
-    const userId = req.user?.id;
+    // const userId = req.user?.id;
 
     if (!text || !userId || !deviceId) {
       return res.status(400).json({
