@@ -29,12 +29,11 @@ function normalizeMerchant(name = "") {
 }
 
 // -------------------------
-// RULE-BASED CLASSIFIER
+// CLASSIFIER
 // -------------------------
 function classifyMerchant(merchant = "") {
     const m = merchant.toLowerCase();
 
-    // FOOD
     if (
         m.includes("jollibee") ||
         m.includes("mcdonald") ||
@@ -44,28 +43,17 @@ function classifyMerchant(merchant = "") {
         m.includes("cafe") ||
         m.includes("coffee")
     ) {
-        return {
-            category: CATEGORIES.FOOD,
-            subcategory: "Restaurant"
-        };
+        return { category: CATEGORIES.FOOD, subcategory: "Restaurant" };
     }
 
-    // TRANSPORT
     if (m.includes("grab") || m.includes("uber")) {
-        return {
-            category: CATEGORIES.TRANSPORT,
-            subcategory: "Ride Hailing"
-        };
+        return { category: CATEGORIES.TRANSPORT, subcategory: "Ride Hailing" };
     }
 
     if (m.includes("shell") || m.includes("petron") || m.includes("gas")) {
-        return {
-            category: CATEGORIES.TRANSPORT,
-            subcategory: "Gas"
-        };
+        return { category: CATEGORIES.TRANSPORT, subcategory: "Gas" };
     }
 
-    // BILLS
     if (
         m.includes("meralco") ||
         m.includes("globe") ||
@@ -73,48 +61,76 @@ function classifyMerchant(merchant = "") {
         m.includes("water") ||
         m.includes("electric")
     ) {
-        return {
-            category: CATEGORIES.BILLS,
-            subcategory: "Utilities"
-        };
+        return { category: CATEGORIES.BILLS, subcategory: "Utilities" };
     }
 
-    // CASH
     if (m.includes("atm") || m.includes("withdraw")) {
-        return {
-            category: CATEGORIES.CASH,
-            subcategory: "ATM Withdrawal"
-        };
+        return { category: CATEGORIES.CASH, subcategory: "ATM Withdrawal" };
     }
 
-    return {
-        category: CATEGORIES.OTHER,
-        subcategory: "Unknown"
-    };
+    return { category: CATEGORIES.OTHER, subcategory: "Unknown" };
 }
 
 // -------------------------
-// FAST RECEIPT PARSER
+// SAFE DATE EXTRACTION (NO "ON" DEPENDENCY)
+// -------------------------
+function extractDate(text) {
+    const patterns = [
+        // 06-May-2026 09:15AM
+        /(\d{2}-[A-Za-z]{3}-\d{4}\s\d{1,2}:\d{2}[AP]M)/,
+
+        // 06/05/2026 09:15
+        /(\d{1,2}\/\d{1,2}\/\d{4}\s\d{1,2}:\d{2})/,
+
+        // ISO
+        /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/
+    ];
+
+    for (const p of patterns) {
+        const match = text.match(p);
+        if (match) return match[1];
+    }
+
+    return null;
+}
+
+// -------------------------
+// ISO CONVERTER
+// -------------------------
+function parseToISO(dateStr) {
+    if (!dateStr) return null;
+
+    const parsed = new Date(dateStr);
+    if (isNaN(parsed)) return null;
+
+    return parsed.toISOString();
+}
+
+// -------------------------
+// RECEIPT PARSER
 // -------------------------
 function parseReceipt(text) {
     const amount = text.match(/PHP\s?([\d,]+\.\d{2})/i);
-    const merchant = text.match(/at\s(.+?)\son/i);
+    const merchant = text.match(/at\s(.+?)\s(?:on|to|in|from)/i);
     const balance = text.match(/Available balance:\sPHP\s?([\d,]+\.\d{2})/i);
     const reference = text.match(/Ref No:\s(\d+)/i);
+
+    const rawDate = extractDate(text);
 
     return {
         amount: amount?.[1]?.replace(/,/g, "") || null,
         merchant: merchant?.[1] || null,
         balance: balance?.[1]?.replace(/,/g, "") || null,
-        reference: reference?.[1] || null
+        reference: reference?.[1] || null,
+        raw_date: rawDate,
+        transaction_time: parseToISO(rawDate)
     };
 }
 
 // -------------------------
-// AI FALLBACK (OPTIONAL)
+// AI FALLBACK
 // -------------------------
 async function aiExtract(text) {
-    // plug OpenAI / Gemini later
     return {
         amount: null,
         merchant: null,
@@ -159,18 +175,16 @@ exports.shared = async (req, res) => {
             .trim();
 
         // -------------------------
-        // PARSE RECEIPT
+        // PARSE
         // -------------------------
         let parsed = parseReceipt(cleanText);
         let usedAI = false;
 
         // -------------------------
-        // MERCHANT CLASSIFICATION
+        // CLASSIFY
         // -------------------------
-        let merchantName = parsed.merchant;
-
-        if (merchantName) {
-            const normalized = normalizeMerchant(merchantName);
+        if (parsed.merchant) {
+            const normalized = normalizeMerchant(parsed.merchant);
             const classification = classifyMerchant(normalized);
 
             parsed.category = classification.category;
@@ -178,55 +192,18 @@ exports.shared = async (req, res) => {
         }
 
         // -------------------------
-        // AI FALLBACK
+        // AI fallback
         // -------------------------
         if (!parsed.amount && !parsed.merchant) {
             parsed = await aiExtract(cleanText);
             usedAI = true;
         }
 
-        // -------------------------
-        // SAVE TO SUPABASE (ENABLE WHEN READY)
-        // -------------------------
-        /*
-        const { error } = await supabase.from("shared_receipts").insert([
-            {
-                user_id: userId,
-                device_id: deviceId,
-                raw_text: text,
-                clean_text: cleanText,
-                amount: parsed.amount,
-                merchant: parsed.merchant,
-                merchant_normalized: parsed.merchant
-                    ? normalizeMerchant(parsed.merchant)
-                    : null,
-                category: parsed.category,
-                subcategory: parsed.subcategory,
-                balance: parsed.balance,
-                reference: parsed.reference,
-                source,
-                time,
-                used_ai: usedAI
-            }
-        ]);
-
-        if (error) {
-            console.error("DB ERROR:", error);
-
-            return res.status(500).json({
-                success: false,
-                message: "Database insert failed"
-            });
-        }
-        */
-
         const duration = Date.now() - startTime;
 
         console.log("Processed in", duration, "ms");
-        console.log(parsed)
-        // -------------------------
-        // RESPONSE
-        // -------------------------
+        console.log(parsed);
+
         return res.status(200).json({
             success: true,
             message: "Processed successfully",
