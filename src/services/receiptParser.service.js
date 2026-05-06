@@ -43,7 +43,9 @@ function parseReceipt(text) {
   const amount = text.match(/PHP\s?([\d,]+\.\d{2})/i);
   const merchant = text.match(/(?:at|from|to)\s(.+?)(?:\s|$)/i);
   const balance = text.match(/balance[:\s]+PHP\s?([\d,]+\.\d{2})/i);
-  const reference = text.match(/ref[:\s]+([A-Za-z0-9-]+)/i);
+  const reference = text.match(
+    /(?:ref(?:erence)?(?:\s*no\.?| number)?|trx|transaction\sref(?:erence)?)[:\s#-]*([A-Za-z0-9-]+)/i,
+  );
 
   const rawDate = extractDate(text);
 
