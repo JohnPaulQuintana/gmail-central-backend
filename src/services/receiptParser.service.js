@@ -51,7 +51,7 @@ const balance = text.match(
 );
 
 const referenceMatch = text.match(
-  /(?:^|\n)\s*(?:ref(?:erence)?\s*(?:no\.?|number)?|trx|transaction\s*ref(?:erence)?)\s*[:#-]?\s*([^\n]+)/i
+  /(?:^|\n)\s*(?:ref(?:erence)?\s*(?:no\.?|number)?)\s*:\s*([^\n]+)/i
 );
 
 const reference = referenceMatch?.[1]?.trim()?.split(/\s+/)[0] || null;
