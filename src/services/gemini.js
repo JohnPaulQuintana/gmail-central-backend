@@ -1,5 +1,3 @@
-const fetch = require("node-fetch");
-
 async function geminiExtract(text) {
   try {
     const prompt = `
