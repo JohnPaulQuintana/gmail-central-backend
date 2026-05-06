@@ -59,3 +59,5 @@ ${text}
     return null;
   }
 }
+
+module.exports = { geminiExtract };
