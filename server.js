@@ -5,6 +5,7 @@ const cors = require("cors");
 const authRoutes = require("./src/routes/auth.routes");
 const deviceRoutes = require("./src/routes/device.routes");
 const notificationRoutes = require("./src/routes/notification.routes");
+const shareRoutes = require("./src/routes/share.routes");
 const gmailRoutes = require("./src/routes/gmail.routes");
 const debugRoutes = require("./src/routes/debug.routes");
 
@@ -16,6 +17,7 @@ app.use(express.json());
 app.use("/auth", authRoutes);
 app.use("/device", deviceRoutes);
 app.use("/notification", notificationRoutes);
+app.use("/share", shareRoutes);
 app.use("/gmail", gmailRoutes);
 app.use("/debug", debugRoutes);
 
