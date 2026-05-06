@@ -96,10 +96,28 @@ function extractDate(text) {
 function parseToISO(dateStr) {
   if (!dateStr) return null;
 
-  const parsed = new Date(dateStr);
-  if (isNaN(parsed)) return null;
+  try {
+    // convert "06-May-2026 09:15AM" → ISO-safe format
+    const cleaned = dateStr
+      .replace(/(\d{2})-([A-Za-z]{3})-(\d{4})/, (_, d, m, y) => {
+        const months = {
+          Jan: "01", Feb: "02", Mar: "03", Apr: "04",
+          May: "05", Jun: "06", Jul: "07", Aug: "08",
+          Sep: "09", Oct: "10", Nov: "11", Dec: "12"
+        };
+        return `${y}-${months[m]}-${d}`;
+      })
+      .replace("AM", " AM")
+      .replace("PM", " PM");
 
-  return parsed.toISOString();
+    const parsed = new Date(cleaned);
+
+    if (isNaN(parsed)) return null;
+
+    return parsed.toISOString();
+  } catch {
+    return null;
+  }
 }
 
 // -------------------------

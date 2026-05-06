@@ -1,18 +1,24 @@
+const fetch = require("node-fetch");
+
 async function geminiExtract(text) {
   try {
     const prompt = `
 You are a receipt parser.
 
-Return ONLY JSON:
+Return ONLY valid JSON. No markdown. No text.
 
+Schema:
 {
   "amount": string|null,
   "merchant": string|null,
-  "date": string|null,
-  "reference": string|null,
-  "category": string,
-  "subcategory": string
+  "balance": string|null,
+  "reference": string|null
 }
+
+Rules:
+- Do NOT include explanations
+- Do NOT wrap in code blocks
+- If unknown, return null
 
 TEXT:
 ${text}
@@ -26,18 +32,27 @@ ${text}
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
         }),
-      },
+      }
     );
 
     const data = await res.json();
 
-    const output = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    if (!output) return null;
+    console.log("RAW GEMINI OUTPUT:", raw);
 
-    return JSON.parse(output.replace("```json", "").replace("```", "").trim());
+    if (!raw) return null;
+
+    // CLEAN HARD (IMPORTANT)
+    const cleaned = raw
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+
+    return JSON.parse(cleaned);
+
   } catch (err) {
-    console.error("Gemini error:", err);
+    console.error("Gemini parse error:", err.message);
     return null;
   }
 }
