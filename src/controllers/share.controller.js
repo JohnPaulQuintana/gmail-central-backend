@@ -223,7 +223,7 @@ exports.shared = async (req, res) => {
         const duration = Date.now() - startTime;
 
         console.log("Processed in", duration, "ms");
-
+        console.log(parsed)
         // -------------------------
         // RESPONSE
         // -------------------------
