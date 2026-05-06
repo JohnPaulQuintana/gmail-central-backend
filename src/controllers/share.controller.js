@@ -1,5 +1,4 @@
 const supabase = require("../db/supabase");
-const { geminiExtract } = require("../services/gemini");
 
 // -------------------------
 // CATEGORY SYSTEM
@@ -18,6 +17,22 @@ const CATEGORIES = {
 };
 
 // -------------------------
+// SOURCE DETECTOR (PH)
+// -------------------------
+function detectSource(text = "") {
+  const t = text.toLowerCase();
+
+  if (t.includes("gcash")) return "GCASH";
+  if (t.includes("maya")) return "MAYA";
+  if (t.includes("bdo")) return "BDO";
+  if (t.includes("bpi")) return "BPI";
+  if (t.includes("unionbank")) return "UNIONBANK";
+  if (t.includes("metrobank")) return "METROBANK";
+
+  return "UNKNOWN";
+}
+
+// -------------------------
 // MERCHANT NORMALIZER
 // -------------------------
 function normalizeMerchant(name = "") {
@@ -30,42 +45,39 @@ function normalizeMerchant(name = "") {
 }
 
 // -------------------------
+// MERCHANT MAP (PH FOCUSED)
+// -------------------------
+const MERCHANT_MAP = {
+  JOLLIBEE: { category: CATEGORIES.FOOD, subcategory: "Fast Food" },
+  MCDONALDS: { category: CATEGORIES.FOOD, subcategory: "Fast Food" },
+  KFC: { category: CATEGORIES.FOOD, subcategory: "Fast Food" },
+  STARBUCKS: { category: CATEGORIES.FOOD, subcategory: "Coffee" },
+
+  SHELL: { category: CATEGORIES.TRANSPORT, subcategory: "Gas" },
+  PETRON: { category: CATEGORIES.TRANSPORT, subcategory: "Gas" },
+  CALTEX: { category: CATEGORIES.TRANSPORT, subcategory: "Gas" },
+
+  GRAB: { category: CATEGORIES.TRANSPORT, subcategory: "Ride Hailing" },
+
+  MERALCO: { category: CATEGORIES.BILLS, subcategory: "Electricity" },
+  GLOBE: { category: CATEGORIES.BILLS, subcategory: "Telecom" },
+  SMART: { category: CATEGORIES.BILLS, subcategory: "Telecom" },
+
+  SHOPEE: { category: CATEGORIES.SHOPPING, subcategory: "E-commerce" },
+  LAZADA: { category: CATEGORIES.SHOPPING, subcategory: "E-commerce" },
+};
+
+// -------------------------
 // CLASSIFIER
 // -------------------------
 function classifyMerchant(merchant = "") {
-  const m = merchant.toLowerCase();
+  const m = merchant.toUpperCase();
 
-  if (
-    m.includes("jollibee") ||
-    m.includes("mcdonald") ||
-    m.includes("kfc") ||
-    m.includes("burger") ||
-    m.includes("restaurant") ||
-    m.includes("cafe") ||
-    m.includes("coffee")
-  ) {
-    return { category: CATEGORIES.FOOD, subcategory: "Restaurant" };
+  for (const key in MERCHANT_MAP) {
+    if (m.includes(key)) return MERCHANT_MAP[key];
   }
 
-  if (m.includes("grab") || m.includes("uber")) {
-    return { category: CATEGORIES.TRANSPORT, subcategory: "Ride Hailing" };
-  }
-
-  if (m.includes("shell") || m.includes("petron") || m.includes("gas")) {
-    return { category: CATEGORIES.TRANSPORT, subcategory: "Gas" };
-  }
-
-  if (
-    m.includes("meralco") ||
-    m.includes("globe") ||
-    m.includes("smart") ||
-    m.includes("water") ||
-    m.includes("electric")
-  ) {
-    return { category: CATEGORIES.BILLS, subcategory: "Utilities" };
-  }
-
-  if (m.includes("atm") || m.includes("withdraw")) {
+  if (m.includes("ATM") || m.includes("WITHDRAW")) {
     return { category: CATEGORIES.CASH, subcategory: "ATM Withdrawal" };
   }
 
@@ -94,16 +106,15 @@ function extractDate(text) {
 // ISO CONVERTER
 // -------------------------
 function parseToISO(dateStr) {
-  if (!dateStr) return null;
+  if (!dateStr) return new Date().toISOString();
 
   try {
-    // convert "06-May-2026 09:15AM" → ISO-safe format
     const cleaned = dateStr
       .replace(/(\d{2})-([A-Za-z]{3})-(\d{4})/, (_, d, m, y) => {
         const months = {
           Jan: "01", Feb: "02", Mar: "03", Apr: "04",
           May: "05", Jun: "06", Jul: "07", Aug: "08",
-          Sep: "09", Oct: "10", Nov: "11", Dec: "12"
+          Sep: "09", Oct: "10", Nov: "11", Dec: "12",
         };
         return `${y}-${months[m]}-${d}`;
       })
@@ -111,34 +122,49 @@ function parseToISO(dateStr) {
       .replace("PM", " PM");
 
     const parsed = new Date(cleaned);
-
-    if (isNaN(parsed)) return null;
-
-    return parsed.toISOString();
+    return isNaN(parsed) ? new Date().toISOString() : parsed.toISOString();
   } catch {
-    return null;
+    return new Date().toISOString();
   }
 }
 
 // -------------------------
-// REGEX PARSER (FAST LAYER)
+// UNIVERSAL PARSER
 // -------------------------
 function parseReceipt(text) {
-  const amount = text.match(/PHP\s?([\d,]+\.\d{2})/i);
-  const merchant = text.match(/at\s(.+?)\s(?:on|to|in|from)/i);
-  const balance = text.match(/Available balance:\sPHP\s?([\d,]+\.\d{2})/i);
-  const reference = text.match(/Ref No:\s(\d+)/i);
+  const source = detectSource(text);
+
+  // amount (multiple formats)
+  const amount =
+    text.match(/PHP\s?([\d,]+\.\d{2})/i) ||
+    text.match(/([\d,]+\.\d{2})\s?PHP/i) ||
+    text.match(/amount[:\s]+([\d,]+\.\d{2})/i);
+
+  // merchant (multiple patterns)
+  const merchant =
+    text.match(/(?:at|from|to|merchant)\s(.+?)(?:\s(?:on|ref|via|$))/i) ||
+    text.match(/paid to\s(.+?)(?:\s|$)/i);
+
+  // balance
+  const balance =
+    text.match(/balance[:\s]+PHP\s?([\d,]+\.\d{2})/i) ||
+    text.match(/available balance[:\s]+PHP\s?([\d,]+\.\d{2})/i);
+
+  // reference
+  const reference =
+    text.match(/ref(?:erence)?(?: no)?[:\s]+([A-Za-z0-9-]+)/i) ||
+    text.match(/trx[:\s]+([A-Za-z0-9]+)/i);
 
   const rawDate = extractDate(text);
 
   return {
+    source,
     amount: amount?.[1]?.replace(/,/g, "") || null,
     merchant: merchant?.[1] || null,
     balance: balance?.[1]?.replace(/,/g, "") || null,
     reference: reference?.[1] || null,
     raw_date: rawDate,
     transaction_time: parseToISO(rawDate),
-    source: "regex",
   };
 }
 
@@ -149,15 +175,8 @@ exports.shared = async (req, res) => {
   const startTime = Date.now();
 
   try {
-    console.log("\n==================== NEW REQUEST ====================");
+    const { text, userId, deviceId } = req.body;
 
-    const { text, userId, deviceId, source, time } = req.body;
-
-    console.log(req.body);
-
-    // -------------------------
-    // VALIDATION
-    // -------------------------
     if (!text || !userId || !deviceId) {
       return res.status(400).json({
         success: false,
@@ -165,94 +184,26 @@ exports.shared = async (req, res) => {
       });
     }
 
-    // -------------------------
-    // CLEAN TEXT
-    // -------------------------
-    const cleanText = text
-      .replace(/Menu/gi, "")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
+    const cleanText = text.replace(/Menu/gi, "").trim();
 
-    // -------------------------
-    // LAYER 1: REGEX
-    // -------------------------
-    let regexParsed = parseReceipt(cleanText);
+    let parsed = parseReceipt(cleanText);
 
-    // -------------------------
-    // CLASSIFY (FROM REGEX)
-    // -------------------------
-    if (regexParsed.merchant) {
-      const normalized = normalizeMerchant(regexParsed.merchant);
+    // classify
+    if (parsed.merchant) {
+      const normalized = normalizeMerchant(parsed.merchant);
       const classification = classifyMerchant(normalized);
 
-      regexParsed.category = classification.category;
-      regexParsed.subcategory = classification.subcategory;
+      parsed.category = classification.category;
+      parsed.subcategory = classification.subcategory;
     }
-
-    // -------------------------
-    // LAYER 2: GEMINI AI
-    // -------------------------
-    console.log("🧠 Calling Gemini AI...");
-
-    let geminiParsed = await geminiExtract(cleanText);
-
-    if (!geminiParsed) {
-      console.log("❌ Gemini failed");
-      geminiParsed = {};
-    } else {
-      console.log("✅ Gemini success");
-    }
-
-    // -------------------------
-    // DEBUG MERGED RESULT
-    // -------------------------
-    const finalParsed = {
-      amount: regexParsed.amount || geminiParsed.amount,
-      merchant: regexParsed.merchant || geminiParsed.merchant,
-      balance: regexParsed.balance || geminiParsed.balance,
-      reference: regexParsed.reference || geminiParsed.reference,
-      raw_date: regexParsed.raw_date || geminiParsed.raw_date,
-      transaction_time:
-        regexParsed.transaction_time || geminiParsed.transaction_time,
-
-      category: regexParsed.category || geminiParsed.category,
-      subcategory: regexParsed.subcategory || geminiParsed.subcategory,
-    };
-
-    // -------------------------
-    // DEBUG RESPONSE (IMPORTANT)
-    // -------------------------
-    const debug = {
-      regex: regexParsed,
-      gemini: geminiParsed,
-      final: finalParsed,
-      source_used: {
-        regex_hit: !!regexParsed.amount || !!regexParsed.merchant,
-        gemini_hit: !!geminiParsed.amount || !!geminiParsed.merchant,
-      },
-    };
 
     const duration = Date.now() - startTime;
 
-    console.log("=========== REGEX OUTPUT ===========");
-    console.log(regexParsed);
+    console.log("FINAL:", parsed);
 
-    console.log("=========== GEMINI OUTPUT ===========");
-    console.log(geminiParsed);
-
-    console.log("=========== FINAL OUTPUT ===========");
-    console.log(finalParsed);
-
-    console.log("Processed in", duration, "ms");
-
-    // -------------------------
-    // RESPONSE
-    // -------------------------
     return res.status(200).json({
       success: true,
-      message: "Processed successfully",
-      debug,
-      parsed: finalParsed,
+      parsed,
       duration,
     });
   } catch (error) {
