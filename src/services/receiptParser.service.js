@@ -5,6 +5,30 @@ const { classifyMerchant } = require("../utils/category.util");
 const { normalizeMerchant } = require("../utils/merchant.util");
 const { extractDate, parseToISO } = require("../utils/date.util");
 
+function extractReference(text) {
+  const lines = text.split("\n").map((l) => l.trim());
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+
+    // detect reference line
+    if (
+      lower.startsWith("ref") ||
+      lower.includes("reference") ||
+      lower.includes("trx")
+    ) {
+      // split by colon
+      const parts = line.split(":");
+
+      if (parts.length > 1) {
+        return parts[1].trim().split(" ")[0]; // first token only
+      }
+    }
+  }
+
+  return null;
+}
+
 function parseReceipt(text) {
   const source = detectSource(text);
 
@@ -42,31 +66,25 @@ function parseReceipt(text) {
   // fallback
   const amount = text.match(/PHP\s?([\d,]+\.\d{2})/i);
 
-const merchant = text.match(
-  /(?:to|from|at)\s+(.+?)(?=\s+via|\n|$)/i
-);
+  const merchant = text.match(/(?:to|from|at)\s+(.+?)(?=\s+via|\n|$)/i);
 
-const balance = text.match(
-  /(?:available\s+)?balance[:\s]+PHP\s?([\d,]+\.\d{2})/i
-);
+  const balance = text.match(
+    /(?:available\s+)?balance[:\s]+PHP\s?([\d,]+\.\d{2})/i,
+  );
 
-const referenceMatch = text.match(
-  /(?:^|\n)\s*(?:ref(?:erence)?\s*(?:no\.?|number)?)\s*:\s*([^\n]+)/i
-);
+  const reference = extractReference(text);
 
-const reference = referenceMatch?.[1]?.trim()?.split(/\s+/)[0] || null;
+  const rawDate = extractDate(text);
 
-const rawDate = extractDate(text);
-
-return {
-  source,
-  amount: amount?.[1]?.replace(/,/g, "") || null,
-  merchant: merchant?.[1]?.trim() || null,
-  balance: balance?.[1]?.replace(/,/g, "") || null,
-  reference,
-  raw_date: rawDate,
-  transaction_time: parseToISO(rawDate),
-};
+  return {
+    source,
+    amount: amount?.[1]?.replace(/,/g, "") || null,
+    merchant: merchant?.[1]?.trim() || null,
+    balance: balance?.[1]?.replace(/,/g, "") || null,
+    reference,
+    raw_date: rawDate,
+    transaction_time: parseToISO(rawDate),
+  };
 }
 
 module.exports = { parseReceipt };
