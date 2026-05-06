@@ -16,6 +16,7 @@ exports.shared = async (req, res) => {
 
     const parsed = parseReceipt(text.replace(/Menu/gi, "").trim());
     console.log("================PARSED==============================")
+    console.log(text.replace(/Menu/gi, "").trim())
     console.log(parsed)
     return res.status(200).json({
       success: true,
