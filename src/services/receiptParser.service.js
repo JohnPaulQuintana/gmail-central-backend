@@ -66,7 +66,9 @@ function parseReceipt(text) {
   // fallback
   const amount = text.match(/PHP\s?([\d,]+\.\d{2})/i);
 
-  const merchant = text.match(/(?:to|from|at)\s+(.+?)(?=\s+via|\n|$)/i);
+const merchant = text.match(
+  /(?:to|from|at)\s+(.+?)(?=\s+(?:via|on|php|ref|balance)|\n|$)/i
+);
 
   const balance = text.match(
     /(?:available\s+)?balance[:\s]+PHP\s?([\d,]+\.\d{2})/i,
